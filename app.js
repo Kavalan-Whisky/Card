@@ -3,7 +3,12 @@ const AppState = {
     theme: localStorage.getItem('theme') || 'light',
     username: localStorage.getItem('username') || 'Developer Exec',
     apiCallCount: 0,
-    cryptoData: []
+    // Baseline state tracking for incoming live feeds
+    crypto: {
+        bitcoin: { price: 0, change: 0 },
+        ethereum: { price: 0, change: 0 },
+        solana: { price: 0, change: 0 }
+    }
 };
 
 // DOM Elements
@@ -19,40 +24,36 @@ const cryptoContainer = document.getElementById('crypto-container');
 
 // Initialize Application
 function init() {
-    // Set initial Theme
     document.documentElement.setAttribute('data-theme', AppState.theme);
-    
-    // Set initial configuration layouts
     welcomeUser.textContent = `Welcome, ${AppState.username}`;
     usernameInput.value = AppState.username;
     
     setupEventListeners();
-    updateTimestamp();
-    fetchCryptoData();
     
-    // Auto-refresh crypto data every 60 seconds
-    setInterval(fetchCryptoData, 60000);
+    // Render placeholders immediately so layout doesn't flicker
+    renderCryptoCards(); 
+    
+    // Fire up the high-frequency stream engine
+    initCryptoWebSocket();
+    
+    // Keep the system clock precisely synced every half second
+    setInterval(updateTimestamp, 500);
 }
 
 // Event Listeners Routing System
 function setupEventListeners() {
-    // Theme Toggling Logic
     themeToggle.addEventListener('click', () => {
         AppState.theme = AppState.theme === 'light' ? 'dark' : 'light';
         document.documentElement.setAttribute('data-theme', AppState.theme);
         localStorage.setItem('theme', AppState.theme);
     });
 
-    // Single Page Application View Router
     navItems.forEach(item => {
         item.addEventListener('click', (e) => {
             e.preventDefault();
-            
-            // Toggle active navigation class
             navItems.forEach(nav => nav.classList.remove('active'));
             item.classList.add('active');
             
-            // Switch current visible view block
             const targetView = item.getAttribute('data-target');
             views.forEach(view => {
                 view.classList.remove('active-view');
@@ -63,7 +64,6 @@ function setupEventListeners() {
         });
     });
 
-    // Save Settings Event
     saveSettingsBtn.addEventListener('click', () => {
         const newName = usernameInput.value.trim();
         if (newName) {
@@ -75,40 +75,68 @@ function setupEventListeners() {
     });
 }
 
-// Asynchronous Data Fetching Engine (Consuming Free Public API)
-async function fetchCryptoData() {
-    try {
-        const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,cardano&vs_currencies=usd&include_24hr_change=true');
-        
-        if (!response.ok) throw new Error('Network throttling/error occurred fetching data.');
-        
-        const data = await response.json();
-        AppState.apiCallCount++;
-        apiCounterEl.textContent = AppState.apiCallCount;
-        updateTimestamp();
-        
-        renderCryptoCards(data);
-    } catch (error) {
-        console.error(error);
-        cryptoContainer.innerHTML = `<div class="card" style="color: red;">Failed to retrieve real-time data. API limit may be reached.</div>`;
-    }
+// WebSocket Live Stream Engine (No API keys required, zero rate-limiting)
+function initCryptoWebSocket() {
+    // Binance public combined stream for real-time tickers
+    const streamUrl = "wss://stream.binance.com:9443/stream?streams=btcusdt@ticker/ethusdt@ticker/solusdt@ticker";
+    const socket = new WebSocket(streamUrl);
+
+    socket.onmessage = (event) => {
+        const message = JSON.parse(event.data);
+        const streamName = message.stream;
+        const data = message.data;
+
+        // Map incoming live stream symbols to our local AppState
+        let coinKey = "";
+        if (streamName.includes("btc")) coinKey = "bitcoin";
+        if (streamName.includes("eth")) coinKey = "ethereum";
+        if (streamName.includes("sol")) coinKey = "solana";
+
+        if (coinKey) {
+            AppState.crypto[coinKey].price = parseFloat(data.c);  // 'c' = Current Closing Price
+            AppState.crypto[coinKey].change = parseFloat(data.P); // 'P' = 24h Price Change %
+            
+            AppState.apiCallCount++; 
+            apiCounterEl.textContent = AppState.apiCallCount;
+            updateTimestamp();
+            
+            // Re-render UI with new micro-movements
+            renderCryptoCards();
+        }
+    };
+
+    socket.onerror = (error) => {
+        console.error("WebSocket Error: ", error);
+    };
+
+    // Auto-reconnect handler if the user's internet drops out
+    socket.onclose = () => {
+        console.warn("WebSocket closed. Attempting secure reconnection in 2 seconds...");
+        setTimeout(initCryptoWebSocket, 2000);
+    };
 }
 
 // Render Engine for UI
-function renderCryptoCards(data) {
-    cryptoContainer.innerHTML = ''; // Clear loading element
+function renderCryptoCards() {
+    cryptoContainer.innerHTML = ''; 
     
-    Object.keys(data).forEach(coin => {
-        const price = data[coin].usd;
-        const change = data[coin].usd_24h_change.toFixed(2);
+    Object.keys(AppState.crypto).forEach(coin => {
+        const coinData = AppState.crypto[coin];
+        const isLive = coinData.price !== 0;
+        
+        // Format parameters cleanly
+        const priceText = isLive ? `$${coinData.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Streaming...';
+        const change = isLive ? coinData.change.toFixed(2) : '0.00';
         const changeClass = change >= 0 ? 'online' : 'offline';
+        const arrow = change >= 0 ? '▲' : '▼';
+        const accentColor = change >= 0 ? '#10b981' : '#ef4444';
         
         const cardHTML = `
             <div class="card">
                 <h3 style="text-transform: capitalize;">${coin}</h3>
-                <p class="metric-value">$${price.toLocaleString()}</p>
-                <p class="status-indicator ${changeClass}" style="color: ${change >= 0 ? '#10b981' : '#ef4444'}">
-                    ${change >= 0 ? '▲' : '▼'} ${change}% (24h)
+                <p class="metric-value">${priceText}</p>
+                <p class="status-indicator ${changeClass}" style="color: ${isLive ? accentColor : 'var(--text-muted)'}">
+                    ${isLive ? `${arrow} ${change}% (24h)` : 'Synchronizing market...'}
                 </p>
             </div>
         `;
@@ -121,5 +149,5 @@ function updateTimestamp() {
     timestampEl.textContent = now.toTimeString().split(' ')[0];
 }
 
-// Execute core sequence
+// Initialize system execution setup
 document.addEventListener('DOMContentLoaded', init);
