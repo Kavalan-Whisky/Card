@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise Analytics Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="logo">CoreDash</div>
+            <nav>
+                <a href="#" class="nav-item active" data-target="overview">Overview</a>
+                <a href="#" class="nav-item" data-target="crypto">Crypto Tracker</a>
+                <a href="#" class="nav-item" data-target="settings">Settings</a>
+            </nav>
+            <div class="theme-toggle-container">
+                <button id="theme-toggle">Toggle Dark Mode</button>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="top-bar">
+                <h1>Dashboard Overview</h1>
+                <div class="user-profile">
+                    <span id="welcome-user">Loading Profile...</span>
+                </div>
+            </header>
+
+            <section id="overview-view" class="dashboard-view active-view">
+                <div class="metrics-grid">
+                    <div class="card">
+                        <h3>System Status</h3>
+                        <p class="status-indicator online">Operational</p>
+                    </div>
+                    <div class="card">
+                        <h3>Session API Calls</h3>
+                        <p id="api-counter" class="metric-value">0</p>
+                    </div>
+                    <div class="card">
+                        <h3>Last Updated</h3>
+                        <p id="timestamp" class="metric-value">--:--</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="crypto-view" class="dashboard-view">
+                <h2>Live Cryptocurrency Rates</h2>
+                <p class="subtitle">Fetched in real-time from external public APIs</p>
+                <div class="crypto-grid" id="crypto-container">
+                    <div class="loading">Fetching live market data...</div>
+                </div>
+            </section>
+
+            <section id="settings-view" class="dashboard-view">
+                <h2>User Preferences</h2>
+                <div class="card settings-card">
+                    <label for="username-input">Update Display Name:</label>
+                    <input type="text" id="username-input" placeholder="Enter name...">
+                    <button id="save-settings-btn">Save Changes</button>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>
